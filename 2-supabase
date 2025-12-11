@@ -119,6 +119,50 @@ Never log:
 - Secrets  
 - PII  
 
+
+## 8.9 Additional Mandatory Safeguards (Required for 100% Compliance)
+
+### 1. Explicit Decode-Only Rejection Rule
+Claude must explicitly verify that **no part of the codebase uses decode-only JWT handling**.  
+If any decode call is encountered (e.g., `jwt.decode()`, `decodeJwt()`), Claude MUST:
+
+- Refuse to proceed  
+- Ask for confirmation  
+- Recommend replacing with full JWKS validation  
+
+### 2. Guard Order Verification Checklist
+Before modifying or adding any guarded endpoint, Claude must:
+
+1. Inspect the controller file.  
+2. Confirm the guard order EXACTLY matches:
+
+@UseGuards(JwtAuthGuard, RolesGuard OR PermissionsGuard, OrgScopeGuard)
+
+
+3. If guard order is unclear (due to decorators, inheritance, or mixed usage), Claude MUST ask the human.
+
+### 3. Multi-Org CSM Clarification Rule
+If user identity spans multiple organizations (CSM or similar), Claude must:
+
+- Ask for the expected scoping behavior  
+- Ask for the exact field representing "allowed orgs"  
+- Never infer the multi-org mapping  
+
+### 4. Nested DTO Leakage Check
+Before returning any DTO, Claude must:
+
+- Inspect all nested objects  
+- Verify *no internal fields* (permissions, scopes, org mappings, JWT metadata) are included  
+- Ask before returning any object containing fields not explicitly approved
+
+### 5. Cache Invalidation Clarification Rule
+Before applying caching to any Supabase-authenticated resource, Claude must ask:
+
+- “What events invalidate this cache?”
+- “Do role/permission/org changes affect this data?”
+- “Is this safe to cache across internal vs org users?”
+
+Never infer invalidation behavior from existing code.
 ---
 
 # END OF FILE
