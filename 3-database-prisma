@@ -13,47 +13,63 @@ Claude must follow these strictly when writing database queries, migrations, or 
 **Every query MUST include organization_id filter:**
 
 ```typescript
-// ✅ CORRECT
 const data = await this.prisma.model.findMany({
   where: {
-    organization_id: currentUser.organization_id, // REQUIRED
-    // ... other filters
+    organization_id: currentUser.organization_id,
   }
 });
 
-// ❌ WRONG - Missing org filter
 const data = await this.prisma.model.findMany({
-  where: { status: 'active' } // Missing organization_id
+  where: { status: 'active' }
 });
 ```
 
 ## 1.2 Team Scoping (When Applicable)
 
-**If querying team-scoped data, include team_id:**
+**If querying team-scoped data, include team_id AND organization_id:**
 
 ```typescript
-// ✅ CORRECT
 const assignments = await this.prisma.assignments.findMany({
   where: {
-    organization_id: organizationId, // REQUIRED
-    team_id: teamId, // REQUIRED for team-scoped queries
+    organization_id: organizationId,
+    team_id: teamId,
     deleted_at: null,
   }
 });
+
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    assignment: {
+      organization_id: organizationId,
+      team_id: teamId,
+    },
+    role_play: {
+      organization_id: organizationId,
+    },
+  },
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    assignment: {
+      team_id: teamId,
+    },
+  },
+});
 ```
+
+**Rule:** When filtering by team through relations, verify organization_id matches at the relation level to prevent cross-org data leakage.
 
 ## 1.3 Multi-Org Users (CSM)
 
 **Use CSMScopeService for multi-org scoping:**
 
 ```typescript
-// ✅ CORRECT
 const scopedIds = this.csmScopeService.getScopedOrganizationIds(currentUser);
 if (scopedIds !== null) {
   where.organization_id = { in: scopedIds };
 }
 
-// Or use utility:
 const where = PermissionFilterUtil.buildDirectOrganizationFilter(
   currentUser,
   this.csmScopeService,
@@ -61,37 +77,45 @@ const where = PermissionFilterUtil.buildDirectOrganizationFilter(
 );
 ```
 
-## 1.4 Cross-Relation Scoping
+## 1.4 Cross-Relation Scoping (MANDATORY)
 
 **When filtering through relations, scope at the relation level:**
 
+**CRITICAL:** Even if you've pre-filtered users by organization_id, you MUST also scope assessments through role_play.organization_id for defense-in-depth.
+
 ```typescript
-// ✅ CORRECT - Scoping through role_play relation
 const assessments = await this.prisma.assessments.findMany({
   where: {
+    user_id: { in: userIds },
     role_play: {
-      organization_id: currentUser.organization_id, // Scoped through relation
+      organization_id: organizationId,
     },
+    status: 'COMPLETED',
   },
 });
 
-// ❌ WRONG - No scoping
 const assessments = await this.prisma.assessments.findMany({
-  where: { status: 'COMPLETED' } // Missing org scope
+  where: {
+    user_id: { in: userIds },
+    status: 'COMPLETED',
+  },
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: { status: 'COMPLETED' }
 });
 ```
+
+**Rule:** When querying through relations (assessments → role_play, assignments → teams, etc.), ALWAYS add organization_id filter at the relation level, even if parent entities are already scoped.
 
 ## 1.5 Never Trust Client-Provided Org IDs
 
 **Always validate org access before using client-provided organization_id:**
 
 ```typescript
-// ✅ CORRECT
 if (isOrganizationUser(currentUser)) {
-  // Force use of user's org, ignore client input
   where.organization_id = currentUser.organization_id;
 } else {
-  // Validate CSM has access to requested org
   this.csmScopeService.validateOrganizationAccess(
     currentUser,
     [query.organization_id]
@@ -109,7 +133,6 @@ if (isOrganizationUser(currentUser)) {
 **Prefer `select` over `include` when possible:**
 
 ```typescript
-// ✅ CORRECT - Only fetch needed fields
 const user = await this.prisma.organization_users.findFirst({
   where: { id: userId },
   select: {
@@ -121,7 +144,6 @@ const user = await this.prisma.organization_users.findFirst({
   },
 });
 
-// ⚠️ ACCEPTABLE - But heavier
 const user = await this.prisma.organization_users.findFirst({
   where: { id: userId },
   include: { organization: true },
@@ -133,7 +155,6 @@ const user = await this.prisma.organization_users.findFirst({
 **Use `findMany` with `in` instead of loops:**
 
 ```typescript
-// ✅ CORRECT - Single query
 const assessments = await this.prisma.assessments.findMany({
   where: {
     user_id: { in: userIds },
@@ -142,7 +163,6 @@ const assessments = await this.prisma.assessments.findMany({
   },
 });
 
-// ❌ WRONG - N+1 queries
 for (const userId of userIds) {
   const assessment = await this.prisma.assessments.findFirst({
     where: { user_id: userId },
@@ -150,12 +170,11 @@ for (const userId of userIds) {
 }
 ```
 
-## 2.3 Ordering (Deterministic Results)
+## 2.3 Ordering (Deterministic Results) - MANDATORY
 
-**Always include orderBy for list queries:**
+**Always include orderBy for ALL list queries, even if results will be aggregated:**
 
 ```typescript
-// ✅ CORRECT
 const competencies = await this.prisma.scenario_competencies.findMany({
   where: { scenario_id },
   orderBy: [
@@ -164,26 +183,37 @@ const competencies = await this.prisma.scenario_competencies.findMany({
   ],
 });
 
-// ❌ WRONG - Unpredictable order
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    user_id: { in: userIds },
+    role_play: { organization_id: orgId },
+  },
+  orderBy: { completed_at: 'desc' },
+});
+
 const competencies = await this.prisma.scenario_competencies.findMany({
   where: { scenario_id },
 });
+
+const assessments = await this.prisma.assessments.findMany({
+  where: { user_id: { in: userIds } },
+});
 ```
+
+**Exception:** Only skip orderBy if querying by unique field (findUnique, findFirst with unique where clause). All findMany queries MUST have orderBy.
 
 ## 2.4 Soft Deletes
 
 **Always filter deleted_at for user-facing queries:**
 
 ```typescript
-// ✅ CORRECT
 const tracks = await this.prisma.tracks.findMany({
   where: {
     organization_id,
-    deleted_at: null, // REQUIRED
+    deleted_at: null,
   },
 });
 
-// ❌ WRONG - Includes deleted records
 const tracks = await this.prisma.tracks.findMany({
   where: { organization_id },
 });
@@ -198,7 +228,6 @@ const tracks = await this.prisma.tracks.findMany({
 **Wrap related writes in transactions:**
 
 ```typescript
-// ✅ CORRECT
 await this.prisma.$transaction(async (tx) => {
   const org = await tx.organizations.create({ data: orgData });
   await tx.organization_users.create({
@@ -207,7 +236,6 @@ await this.prisma.$transaction(async (tx) => {
   return org;
 });
 
-// ❌ WRONG - No transaction
 const org = await this.prisma.organizations.create({ data: orgData });
 await this.prisma.organization_users.create({
   data: { organization_id: org.id, ...userData },
@@ -240,15 +268,13 @@ await this.prisma.organization_users.create({
 **Ask before making fields nullable/non-nullable:**
 
 ```typescript
-// ⚠️ DANGEROUS - Breaking change
 model User {
-  email String // Was String?
+  email String
 }
 
-// ✅ SAFE - Add new field as optional
 model User {
   email String?
-  new_field String? // Optional first
+  new_field String?
 }
 ```
 
@@ -257,15 +283,13 @@ model User {
 **Always provide defaults for new required fields:**
 
 ```typescript
-// ✅ CORRECT
 model Assignment {
   status String @default("PENDING")
   created_at DateTime @default(now())
 }
 
-// ❌ WRONG - No default for required field
 model Assignment {
-  status String // Will fail on existing records
+  status String
 }
 ```
 
@@ -288,11 +312,9 @@ Before creating migration, Claude must verify:
 **Import types from Prisma, don't redefine:**
 
 ```typescript
-// ✅ CORRECT
 import { Prisma } from '@prisma/client';
 type UserCreateInput = Prisma.organization_usersCreateInput;
 
-// ❌ WRONG - Redefining types
 type UserCreateInput = {
   first_name: string;
   last_name: string;
@@ -304,14 +326,12 @@ type UserCreateInput = {
 **Use Prisma's generated types:**
 
 ```typescript
-// ✅ CORRECT
 const user: Prisma.organization_usersGetPayload<{
   include: { organization: true };
 }> = await this.prisma.organization_users.findFirst({
   include: { organization: true },
 });
 
-// Or simpler:
 type UserWithOrg = Prisma.organization_usersGetPayload<{
   include: { organization: true };
 }>;
@@ -336,7 +356,6 @@ type UserWithOrg = Prisma.organization_usersGetPayload<{
 **Always paginate list queries:**
 
 ```typescript
-// ✅ CORRECT
 const results = await this.prisma.model.findMany({
   where: { organization_id },
   take: limit || 50,
@@ -344,7 +363,6 @@ const results = await this.prisma.model.findMany({
   orderBy: { created_at: 'desc' },
 });
 
-// ❌ WRONG - No pagination
 const results = await this.prisma.model.findMany({
   where: { organization_id },
 });
@@ -355,12 +373,10 @@ const results = await this.prisma.model.findMany({
 **Use count() for totals, not findMany().length:**
 
 ```typescript
-// ✅ CORRECT
 const total = await this.prisma.model.count({
   where: { organization_id },
 });
 
-// ❌ WRONG - Inefficient
 const all = await this.prisma.model.findMany({
   where: { organization_id },
 });
@@ -371,14 +387,17 @@ const total = all.length;
 When calculating per-member metrics in paginated results:
 
 **Prefer batch queries:**
-// ✅ CORRECT - Batch all member IDs
+
+```typescript
 const trends = await this.batchGetScoreTrends(memberIds);
 const coverages = await this.batchGetCompetencyCoverages(memberIds);
 
-// ⚠️ ACCEPTABLE - If batch not feasible and pagination small (<50)
 for (const memberId of paginatedMemberIds) {
   const trend = await this.getScoreTrend(memberId);
-}**Ask before implementing per-member queries in loops.**
+}
+```
+
+**Ask before implementing per-member queries in loops.**
 ---
 
 # 7. ERROR HANDLING
@@ -393,7 +412,6 @@ try {
 } catch (error) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
-      // Unique constraint violation
       throw this.errorService.conflict(ErrorCode.EMAIL_ALREADY_EXISTS);
     }
   }
@@ -417,7 +435,6 @@ try {
 **Keep Prisma queries in repository classes:**
 
 ```typescript
-// ✅ CORRECT - Repository pattern
 @Injectable()
 export class AssignmentRepository {
   async findForTeam(teamId: string, orgId: string) {
@@ -427,10 +444,9 @@ export class AssignmentRepository {
   }
 }
 
-// ❌ WRONG - Direct Prisma in service
 export class AssignmentService {
   async getTeamAssignments(teamId: string) {
-    return this.prisma.assignments.findMany({ // Should use repository
+    return this.prisma.assignments.findMany({
       where: { team_id: teamId },
     });
   }
@@ -542,9 +558,11 @@ Before writing any Prisma query, Claude must verify:
 
 **Query Construction:**
 - [ ] organization_id filter included (or scoped through relation)
+- [ ] **If querying through relations (assessments, assignments), organization_id scoped at relation level** (defense-in-depth)
+- [ ] **If filtering by team through relations, organization_id verified at relation level**
 - [ ] team_id included if querying team data
 - [ ] deleted_at filter for soft-deleted models
-- [ ] orderBy included for list queries
+- [ ] **orderBy included for ALL findMany queries** (mandatory, even if aggregating)
 - [ ] Pagination applied (take/skip)
 - [ ] No N+1 queries (use batch operations)
 - [ ] Transaction used for multi-step writes
