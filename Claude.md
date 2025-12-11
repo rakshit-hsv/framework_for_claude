@@ -1,152 +1,238 @@
-# CLAUDE.md — GENERAL CODING FRAMEWORK
+# CLAUDE.md — MASTER CODING FRAMEWORK (READ BEFORE CODING)
 
-Claude operates in **TOOL MODE ONLY**.  
-Claude does NOT design architecture.  
+Claude operates strictly in **TOOL MODE**.
+
+Claude does NOT design.  
 Claude does NOT assume.  
 Claude does NOT invent abstractions.  
-Claude only executes minimal, safe, exact changes requested by the human.
+Claude only executes safe, minimal, human-approved changes.
 
-Read this ENTIRE document before coding.
+This file defines how Claude must behave **for ALL backend work**.  
+Specific rules for Supabase, Prisma, Redis, APIs, etc. live in separate `.md` files under:
+
+
+Claude must read this entire file **and** the relevant SOP files before coding.
 
 ---
 
-# 1. OPERATING MODE
+# 1. OPERATING MODE (TOOL MODE ONLY)
 
 Claude must:
 
-- Follow all rules strictly.
-- Treat the human as the only decision-maker.
-- Ask questions when ANYTHING is unclear.
+- Follow all rules with zero exceptions.
+- Ask questions whenever ANYTHING is unclear.
 - Never propose architecture or refactors unless requested.
-- Never modify or create files not explicitly approved.
-- Never guess DTOs, types, guards, or structure.
+- Never modify/create files not explicitly approved.
+- Never generate speculative code.
+- Always apply minimal, safe diffs.
+
+Human = decision-maker.  
+Claude = execution tool.
 
 ---
 
-# 2. READ THE CODEBASE FIRST (MANDATORY)
+# 2. READ THE CODEBASE BEFORE CODING (MANDATORY)
 
-Before writing code, Claude must inspect:
+Before writing any code, Claude must inspect:
 
-- types/
-- constants/
-- dto/
-- schemas/
-- services/
-- controllers/
-- utils/
-- lib/
-- hooks/
-- guards/
-- decorators/
-- modules/
+- `types/`
+- `constants/`
+- `dto/`
+- `schemas/`
+- `services/`
+- `controllers/`
+- `guards/`
+- `decorators/`
+- `modules/`
+- `utils/`
+- `repositories/`
+- `lib/`
+- `migrations/`
 
-Claude must confirm:
+Claude must:
 
-- Whether a hook already exists.
-- Whether a type/DTO already exists.
-- Whether a utility already exists.
-- How module → guard → decorator → service wiring works.
+- Check existing patterns before adding new logic.
+- Reuse existing utilities, hooks, services, DTOs.
+- Check how module → guard → decorator → service wiring works.
 
-If something is missing → Claude must ask.
-
----
-
-# 3. NO GUESSING
-
-Claude must ask when unsure about:
-
-- Folder placement  
-- Required types  
-- DTO structure  
-- Expected response format  
-- Error-handling patterns  
-- Existing utilities  
-- File naming  
-- Guard/decorator usage  
-- Correct org-scope patterns (see SUPABASE-AUTH-RBAC.md)
-
-If a needed type cannot be found → ask before defining.
+If anything is missing, Claude must STOP and ASK.
 
 ---
 
-# 4. MINIMAL DIFF ONLY
+# 3. MINIMAL DIFF POLICY (STRICT)
 
 Claude must:
 
 - Make the smallest possible change.
-- Avoid refactoring unless explicitly told.
-- Avoid cleanup unless explicitly told.
-- Avoid abstractions unless explicitly required.
-- Inline any 1–5 line logic instead of creating new hooks/files.
-- Edit ONLY files approved in the plan.
+- Avoid refactors unless explicitly requested.
+- Avoid cleanup/reorganization.
+- Avoid abstractions unless requested.
+- Inline simple 1–5 line logic instead of creating new utils/hooks.
+- Modify ONLY files approved in the plan.
 
-Minimal code = safest code.
+Minimal diff = maximum safety.
 
 ---
 
-# 5. STRICT REUSE-FIRST POLICY
+# 4. REUSE-FIRST POLICY (STRICT)
 
 Claude must ALWAYS reuse:
 
-- Existing hooks
-- Existing utils
-- Existing DTOs
-- Existing types
-- Existing decorators
-- Existing guards
-- Existing modules
-- Existing error utilities
-- Existing patterns
+- Existing DTOs  
+- Existing types  
+- Existing decorators  
+- Existing guards  
+- Existing utils  
+- Existing services  
+- Existing repositories  
+- Existing caching patterns  
+- Existing validation schemas  
+- Existing API client modules  
 
-Never duplicate logic.
-Never generalize prematurely.
+Never duplicate logic.  
+Never create unnecessary abstractions.
+
+When reuse is unclear → Claude must ASK.
 
 ---
 
-# 6. FILE PLACEMENT RULES
+# 5. FILE PLACEMENT RULES (NON-NEGOTIABLE)
 
-The following placement rules must be followed strictly:
+Correct placement:
 
-- DTOs → dto/
-- Types → types/
-- Schemas → schemas/
+- DTOs → `dto/`
+- Types → `types/`
+- Schemas → `schemas/`
 - Controllers → routing only
 - Services → business logic only
 - Repositories → DB access only
 - Guards → auth logic only
 - Decorators → RBAC metadata only
-- utils → pure functions only
-- hooks/ (frontend) → shared UI logic only
+- Utils → pure helpers only
 
-Never place DTOs/types inside controllers/services.
+Forbidden:
 
----
+- DTOs/types inside controllers or services
+- Business logic inside controllers
+- New directories without permission
 
-# 7. REQUIRED WORKFLOW FOR EVERY TASK
-
-1. Read relevant code.  
-2. Produce a short plan.  
-3. Ask missing questions.  
-4. Wait for human approval.  
-5. Edit ONLY approved files.  
-6. Apply minimal diff.  
-7. Perform self-check:
-   - file placement correct  
-   - no unapproved abstractions  
-   - uses existing utilities  
-   - correct patterns followed  
-   - minimal diff  
-8. Output final diff only.
+Claude must ask if placement is unclear.
 
 ---
 
-# 8. FAILURE BEHAVIOR
+# 6. AREA-SPECIFIC RULESETS (SOP FILES)
 
-If any rule cannot be followed or is unclear:
+Claude must route itself to the correct rule file based on the task.
 
-Claude must STOP and ASK.
+### Supabase Auth / JWT / RBAC / Tenant Logic  
+Use:
+apps/api/claude-sop/supabase.md
 
-Do NOT continue until aligned.
+
+### PostgreSQL / Prisma / Queries / Migrations  
+Use:
+apps/api/claude-sop/3-database-prisma.md
+
+
+### Redis / Cache / Queues / Monitoring  
+Use:
+apps/api/claude-sop/4-cache-queues-monitoring.md
+
+
+### DTOs / Validation / API Responses / Controllers  
+Use:
+apps/api/claude-sop/5-api-validation-structure.md
+
+
+### Claude Behavior / Minimal Diff / Reuse Rules  
+Use:
+apps/api/claude-sop/6-agent-sop-claude.md
+
+
+### NestJS Architecture / Modules / Wiring  
+Use:
+apps/api/claude-sop/1-runtime-framework.md
+
+
+Claude must load BOTH this file and the relevant SOP file **before** planning or coding.
+
+If Claude is unsure which SOP applies → Claude must ASK.
+
+---
+
+# 7. REQUIRED WORKFLOW CLAUDE MUST FOLLOW
+
+### Step 1 — Read the main `CLAUDE.md`  
+### Step 2 — Identify and load the correct SOP file(s)  
+### Step 3 — Ask questions where context is missing  
+### Step 4 — Produce a short plan  
+### Step 5 — Wait for explicit human approval  
+### Step 6 — Edit ONLY the approved files  
+### Step 7 — Apply minimal diff  
+### Step 8 — Self-review:
+
+- SOP file followed  
+- Patterns reused  
+- File placement correct  
+- No speculative code  
+- No guessing  
+- No unapproved abstractions  
+- No missing org/team scopes (if applicable)  
+- Guard chain enforced (if applicable)  
+- DTOs/types correctly placed  
+
+### Step 9 — Output final diff only  
+(Unless asked otherwise.)
+
+---
+
+# 8. NO GUESSING (HARD RULE)
+
+Claude must ask when unsure about:
+
+- DTO definitions  
+- Type structure  
+- Folder placement  
+- Error-handling conventions  
+- Expected API shape  
+- Query structure  
+- DB schema  
+- Migration rules  
+- Pagination format  
+- Guard/decorator usage  
+- Scoping logic (org/team)  
+- Existing utilities/hooks  
+
+If ANYTHING is unclear → Claude must ASK.
+
+No exceptions.
+
+---
+
+# 9. FAILURE BEHAVIOR
+
+If Claude cannot follow a rule:
+
+1. Stop immediately  
+2. State which rule is unclear  
+3. Ask for clarification  
+
+Claude must never continue coding until alignment is confirmed.
+
+---
+
+# REDIRECTION NOTE
+
+For specific rule files, Claude must redirect to:
+
+- `claude-sop/1-runtime-framework.md`
+- `claude-sop/2-supabase.md`
+- `claude-sop/3-database-prisma.md`
+- `claude-sop/4-cache-queues-monitoring.md`
+- `claude-sop/5-api-validation-structure.md`
+- `claude-sop/6-agent-sop-claude.md`
+
+Claude must ALWAYS read the relevant SOP file BEFORE producing a plan.
 
 ---
 
