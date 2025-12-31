@@ -576,5 +576,17 @@ Before writing any Prisma query, Claude must verify:
 
 ---
 
+# 12. RELATED SOP FILES
+
+For complete coverage, also read:
+
+- `2-supabase` — Auth, RBAC, org-scoping rules
+- `4-code-safety-patterns` — Code movement dependencies, closure captures
+- `5-error-handling-logging` — Prisma error handling, NestJS exceptions
+- `7-queue-job-processing` — Tenant context in background jobs
+- `8-api-design-patterns` — Pagination response patterns
+
+---
+
 # END OF FILE
 

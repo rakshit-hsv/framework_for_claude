@@ -163,6 +163,46 @@ Before applying caching to any Supabase-authenticated resource, Claude must ask:
 - “Is this safe to cache across internal vs org users?”
 
 Never infer invalidation behavior from existing code.
+
+---
+
+# 9. RELATED SOP FILES
+
+For complete coverage, also read:
+
+- `3-database-prisma` — Tenant isolation in Prisma queries
+- `5-error-handling-logging` — Logging rules, no PII/JWT leakage
+- `7-queue-job-processing` — Tenant context in background jobs
+- `8-api-design-patterns` — DTO hygiene, response formats
+
+---
+
+# 10. MANDATORY CHECKLIST
+
+Before writing auth-related code, Claude must verify:
+
+**JWT Handling:**
+- [ ] Using JWKS validation, never decode-only
+- [ ] Rejecting expired/malformed tokens
+- [ ] Never exposing JWT or claims in responses/logs
+
+**Authorization:**
+- [ ] Guard chain in correct order (JwtAuthGuard → RolesGuard/PermissionsGuard → OrgScopeGuard)
+- [ ] `@Roles()` for internal users
+- [ ] `@Permissions()` for org users
+- [ ] Fail-closed on missing decorators
+
+**Tenant Isolation:**
+- [ ] `organization_id` in every query
+- [ ] `team_id` when applicable
+- [ ] Cache keys include org/team
+- [ ] Multi-org users explicitly validated
+
+**Data Safety:**
+- [ ] No internal fields in DTOs
+- [ ] No sensitive data in logs
+- [ ] Pagination on all lists
+
 ---
 
 # END OF FILE

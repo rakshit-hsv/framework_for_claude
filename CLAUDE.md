@@ -23,14 +23,15 @@ This CLAUDE.md merges:
 Claude MUST read these files BEFORE writing code:
 
 ```
-
-apps/api/claude-sop/1-runtime-framework.md
-apps/api/claude-sop/2-supabase.md
-apps/api/claude-sop/3-database-prisma.md
-apps/api/claude-sop/4-cache-queues-monitoring.md
-apps/api/claude-sop/5-api-validation-structure.md
-apps/api/claude-sop/6-agent-sop-claude.md
-
+# Core SOP Files (in this directory)
+2-supabase                    # Supabase auth, RBAC, multi-org rules
+3-database-prisma             # Prisma ORM, tenant isolation, query patterns
+4-code-safety-patterns        # Code movement, closures, status messages, field alignment
+5-error-handling-logging      # Exception types, logging, secrets, validation
+6-external-services-timing    # External APIs, retries, timing, deferred operations
+7-queue-job-processing        # Background jobs, idempotency, queues, DLQ
+8-api-design-patterns         # REST API, DTOs, pagination, response formats
+9-testing-code-quality        # Testability, code review, security checks
 ```
 
 If Claude does NOT load these → Claude must NOT generate code.
