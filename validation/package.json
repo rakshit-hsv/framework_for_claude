@@ -1,30 +1,51 @@
 {
   "name": "sop-validation",
   "version": "1.0.0",
-  "description": "SOP Validation Framework for Backend Code",
-  "main": "runner.js",
+  "description": "SOP Validation Framework - Validates Claude's code against SOP rules",
+  "main": "cli.js",
+  "bin": {
+    "sop-validate": "./cli.ts"
+  },
   "scripts": {
-    "validate": "ts-node runner.ts",
-    "validate:all": "ts-node runner.ts --verbose",
-    "validate:supabase": "ts-node runner.ts -s 2-supabase",
-    "validate:prisma": "ts-node runner.ts -s 3-database-prisma",
-    "validate:errors": "ts-node runner.ts -s 5-error-handling-logging",
-    "validate:api": "ts-node runner.ts -s 8-api-design-patterns",
-    "validate:json": "ts-node runner.ts -f json",
-    "validate:md": "ts-node runner.ts -f markdown",
+    "validate": "ts-node cli.ts",
+
+    "validate:full": "ts-node cli.ts --full --verbose",
+    "validate:staged": "ts-node cli.ts --staged",
+    "validate:changed": "ts-node cli.ts --changed",
+    "validate:commit": "ts-node cli.ts --commit",
+    "validate:branch": "ts-node cli.ts --branch",
+
+    "validate:supabase": "ts-node cli.ts -s 2-supabase",
+    "validate:prisma": "ts-node cli.ts -s 3-database-prisma",
+    "validate:errors": "ts-node cli.ts -s 5-error-handling-logging",
+    "validate:api": "ts-node cli.ts -s 8-api-design-patterns",
+    "validate:security": "ts-node cli.ts -v supabase-auth -v general-practices",
+
+    "validate:json": "ts-node cli.ts -f json",
+    "validate:github": "ts-node cli.ts -f github --strict",
+
     "test": "ts-node test-runner.ts",
     "test:supabase": "ts-node test-runner.ts supabase-auth",
     "test:prisma": "ts-node test-runner.ts prisma-queries",
     "test:all": "ts-node test-runner.ts --all",
+
     "fix": "ts-node self-correction.ts",
-    "fix:dry-run": "ts-node self-correction.ts --max-iterations 0"
+    "fix:dry-run": "ts-node self-correction.ts --max-iterations 0",
+
+    "claude:validate": "ts-node claude-code-validator.ts",
+    "claude:check": "ts-node claude-code-validator.ts --json",
+
+    "precommit": "ts-node cli.ts --staged --strict",
+    "ci": "ts-node cli.ts --staged -f github --strict --fail-on-warnings"
   },
   "keywords": [
     "validation",
     "sop",
     "code-quality",
     "nestjs",
-    "prisma"
+    "prisma",
+    "claude",
+    "ai-code-review"
   ],
   "author": "",
   "license": "MIT",
