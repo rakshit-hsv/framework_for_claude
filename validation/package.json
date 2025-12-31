@@ -1,0 +1,36 @@
+{
+  "name": "sop-validation",
+  "version": "1.0.0",
+  "description": "SOP Validation Framework for Backend Code",
+  "main": "runner.js",
+  "scripts": {
+    "validate": "ts-node runner.ts",
+    "validate:all": "ts-node runner.ts --verbose",
+    "validate:supabase": "ts-node runner.ts -s 2-supabase",
+    "validate:prisma": "ts-node runner.ts -s 3-database-prisma",
+    "validate:errors": "ts-node runner.ts -s 5-error-handling-logging",
+    "validate:api": "ts-node runner.ts -s 8-api-design-patterns",
+    "validate:json": "ts-node runner.ts -f json",
+    "validate:md": "ts-node runner.ts -f markdown",
+    "test": "ts-node test-runner.ts",
+    "test:supabase": "ts-node test-runner.ts supabase-auth",
+    "test:prisma": "ts-node test-runner.ts prisma-queries",
+    "test:all": "ts-node test-runner.ts --all",
+    "fix": "ts-node self-correction.ts",
+    "fix:dry-run": "ts-node self-correction.ts --max-iterations 0"
+  },
+  "keywords": [
+    "validation",
+    "sop",
+    "code-quality",
+    "nestjs",
+    "prisma"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
