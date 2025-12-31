@@ -9,11 +9,90 @@
  *   - Staged changes (pre-commit)
  *   - Specific commits
  *   - Claude's newly written code
+ *   - Init: Copy SOP files to local project
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+
+// ============================================================================
+// INIT COMMAND - Copy SOP files to local project
+// ============================================================================
+
+const SOP_FILES = [
+  '2-supabase.md',
+  '3-database-prisma.md',
+  '4-code-safety-patterns.md',
+  '5-error-handling-logging.md',
+  '6-external-services-timing.md',
+  '7-queue-job-processing.md',
+  '8-api-design-patterns.md',
+  '9-testing-code-quality.md',
+  'CLAUDE.md',
+];
+
+function initSopFiles(targetDir: string = process.cwd()): void {
+  const sopDir = path.join(targetDir, 'claude-sop-api');
+
+  // Create directory if it doesn't exist
+  if (!fs.existsSync(sopDir)) {
+    fs.mkdirSync(sopDir, { recursive: true });
+    console.log(`Created directory: ${sopDir}`);
+  }
+
+  // Find the source sop-files directory (relative to this script)
+  const scriptDir = __dirname;
+  let sourceDir = path.join(scriptDir, 'sop-files');
+
+  // Handle both ts-node (source) and compiled (dist) scenarios
+  if (!fs.existsSync(sourceDir)) {
+    sourceDir = path.join(scriptDir, '..', 'sop-files');
+  }
+  if (!fs.existsSync(sourceDir)) {
+    // Try relative to package root
+    sourceDir = path.resolve(__dirname, '..', 'sop-files');
+  }
+
+  if (!fs.existsSync(sourceDir)) {
+    console.error('Error: Could not find SOP files directory.');
+    console.error('Tried:', path.join(scriptDir, 'sop-files'));
+    process.exit(1);
+  }
+
+  let copiedCount = 0;
+  let skippedCount = 0;
+
+  for (const file of SOP_FILES) {
+    const sourcePath = path.join(sourceDir, file);
+    const destPath = path.join(sopDir, file);
+
+    if (!fs.existsSync(sourcePath)) {
+      console.warn(`Warning: Source file not found: ${file}`);
+      continue;
+    }
+
+    if (fs.existsSync(destPath)) {
+      console.log(`  Skipped (exists): ${file}`);
+      skippedCount++;
+      continue;
+    }
+
+    fs.copyFileSync(sourcePath, destPath);
+    console.log(`  Copied: ${file}`);
+    copiedCount++;
+  }
+
+  console.log('');
+  console.log(`SOP files initialized in: ${sopDir}`);
+  console.log(`  Copied: ${copiedCount} files`);
+  console.log(`  Skipped: ${skippedCount} files (already exist)`);
+  console.log('');
+  console.log('Next steps:');
+  console.log('  1. Add claude-sop-api/ to your CLAUDE.md or .cursorrules');
+  console.log('  2. Reference SOPs in your AI assistant context');
+  console.log('  3. Run: sop-validate --full -d ./src');
+}
 import {
   validators,
   ValidatorName,
@@ -619,6 +698,10 @@ SOP Validation CLI
 
 Validate code against SOP rules. Supports full codebase, commits, and staged changes.
 
+COMMANDS:
+  init                 Copy SOP files to ./claude-sop-api/ in current directory
+  validate             Run validation (default command)
+
 MODES:
   --full               Validate entire codebase (default)
   --staged             Validate only staged changes (for pre-commit)
@@ -640,29 +723,29 @@ OPTIONS:
   -h, --help           Show this help
 
 EXAMPLES:
+  # Initialize SOP files in your project
+  sop-validate init
+
   # Validate full codebase
-  npx ts-node cli.ts --full src/
+  sop-validate --full src/
 
   # Pre-commit hook (staged changes only)
-  npx ts-node cli.ts --staged
+  sop-validate --staged
 
   # Validate uncommitted changes
-  npx ts-node cli.ts --changed
+  sop-validate --changed
 
   # Validate a specific commit
-  npx ts-node cli.ts --commit abc123
+  sop-validate --commit abc123
 
   # Validate feature branch changes
-  npx ts-node cli.ts --branch feature/my-feature
+  sop-validate --branch feature/my-feature
 
   # Validate specific SOPs
-  npx ts-node cli.ts --staged -s 3-database-prisma -s 2-supabase
+  sop-validate --staged -s 3-database-prisma -s 2-supabase
 
   # CI with GitHub annotations
-  npx ts-node cli.ts --staged -f github --strict
-
-  # Validate Claude's code
-  npx ts-node cli.ts --code "const x = 1;" --filename test.ts
+  sop-validate --staged -f github --strict
 
 SOP FILES:
   2-supabase, 3-database-prisma, 4-code-safety-patterns,
@@ -677,6 +760,14 @@ SOP FILES:
 
 function main() {
   const args = process.argv.slice(2);
+
+  // Handle init command
+  if (args[0] === 'init') {
+    const targetDir = args[1] || process.cwd();
+    initSopFiles(targetDir);
+    return;
+  }
+
   const options = parseArgs(args);
 
   try {
@@ -715,4 +806,4 @@ if (require.main === module) {
   main();
 }
 
-export { parseArgs, runValidation };
+export { parseArgs, runValidation, initSopFiles };

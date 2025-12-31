@@ -1,0 +1,592 @@
+# DATABASE-PRISMA.md — STRICT DATABASE ACCESS RULES
+
+These rules apply to all Prisma ORM usage in the backend API.
+
+Claude must follow these strictly when writing database queries, migrations, or data access code.
+
+---
+
+# 1. TENANT ISOLATION (MANDATORY)
+
+## 1.1 Organization Scoping
+
+**Every query MUST include organization_id filter:**
+
+```typescript
+const data = await this.prisma.model.findMany({
+  where: {
+    organization_id: currentUser.organization_id,
+  }
+});
+
+const data = await this.prisma.model.findMany({
+  where: { status: 'active' }
+});
+```
+
+## 1.2 Team Scoping (When Applicable)
+
+**If querying team-scoped data, include team_id AND organization_id:**
+
+```typescript
+const assignments = await this.prisma.assignments.findMany({
+  where: {
+    organization_id: organizationId,
+    team_id: teamId,
+    deleted_at: null,
+  }
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    assignment: {
+      organization_id: organizationId,
+      team_id: teamId,
+    },
+    role_play: {
+      organization_id: organizationId,
+    },
+  },
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    assignment: {
+      team_id: teamId,
+    },
+  },
+});
+```
+
+**Rule:** When filtering by team through relations, verify organization_id matches at the relation level to prevent cross-org data leakage.
+
+## 1.3 Multi-Org Users (CSM)
+
+**Use CSMScopeService for multi-org scoping:**
+
+```typescript
+const scopedIds = this.csmScopeService.getScopedOrganizationIds(currentUser);
+if (scopedIds !== null) {
+  where.organization_id = { in: scopedIds };
+}
+
+const where = PermissionFilterUtil.buildDirectOrganizationFilter(
+  currentUser,
+  this.csmScopeService,
+  baseWhere
+);
+```
+
+## 1.4 Cross-Relation Scoping (MANDATORY)
+
+**When filtering through relations, scope at the relation level:**
+
+**CRITICAL:** Even if you've pre-filtered users by organization_id, you MUST also scope assessments through role_play.organization_id for defense-in-depth.
+
+```typescript
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    user_id: { in: userIds },
+    role_play: {
+      organization_id: organizationId,
+    },
+    status: 'COMPLETED',
+  },
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    user_id: { in: userIds },
+    status: 'COMPLETED',
+  },
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: { status: 'COMPLETED' }
+});
+```
+
+**Rule:** When querying through relations (assessments → role_play, assignments → teams, etc.), ALWAYS add organization_id filter at the relation level, even if parent entities are already scoped.
+
+## 1.5 Never Trust Client-Provided Org IDs
+
+**Always validate org access before using client-provided organization_id:**
+
+```typescript
+if (isOrganizationUser(currentUser)) {
+  where.organization_id = currentUser.organization_id;
+} else {
+  this.csmScopeService.validateOrganizationAccess(
+    currentUser,
+    [query.organization_id]
+  );
+  where.organization_id = query.organization_id;
+}
+```
+
+---
+
+# 2. QUERY PATTERNS
+
+## 2.1 Use Explicit Select (Performance)
+
+**Prefer `select` over `include` when possible:**
+
+```typescript
+const user = await this.prisma.organization_users.findFirst({
+  where: { id: userId },
+  select: {
+    id: true,
+    first_name: true,
+    last_name: true,
+    email: true,
+    organization_id: true,
+  },
+});
+
+const user = await this.prisma.organization_users.findFirst({
+  where: { id: userId },
+  include: { organization: true },
+});
+```
+
+## 2.2 Batch Operations (Prevent N+1)
+
+**Use `findMany` with `in` instead of loops:**
+
+```typescript
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    user_id: { in: userIds },
+    role_play_id: { in: rolePlayIds },
+    assignment_id: { in: assignmentIds },
+  },
+});
+
+for (const userId of userIds) {
+  const assessment = await this.prisma.assessments.findFirst({
+    where: { user_id: userId },
+  });
+}
+```
+
+## 2.3 Ordering (Deterministic Results) - MANDATORY
+
+**Always include orderBy for ALL list queries, even if results will be aggregated:**
+
+```typescript
+const competencies = await this.prisma.scenario_competencies.findMany({
+  where: { scenario_id },
+  orderBy: [
+    { display_order: 'asc' },
+    { weight: 'desc' },
+  ],
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: {
+    user_id: { in: userIds },
+    role_play: { organization_id: orgId },
+  },
+  orderBy: { completed_at: 'desc' },
+});
+
+const competencies = await this.prisma.scenario_competencies.findMany({
+  where: { scenario_id },
+});
+
+const assessments = await this.prisma.assessments.findMany({
+  where: { user_id: { in: userIds } },
+});
+```
+
+**Exception:** Only skip orderBy if querying by unique field (findUnique, findFirst with unique where clause). All findMany queries MUST have orderBy.
+
+## 2.4 Soft Deletes
+
+**Always filter deleted_at for user-facing queries:**
+
+```typescript
+const tracks = await this.prisma.tracks.findMany({
+  where: {
+    organization_id,
+    deleted_at: null,
+  },
+});
+
+const tracks = await this.prisma.tracks.findMany({
+  where: { organization_id },
+});
+```
+
+---
+
+# 3. TRANSACTION SAFETY
+
+## 3.1 Use Transactions for Multi-Step Operations
+
+**Wrap related writes in transactions:**
+
+```typescript
+await this.prisma.$transaction(async (tx) => {
+  const org = await tx.organizations.create({ data: orgData });
+  await tx.organization_users.create({
+    data: { organization_id: org.id, ...userData },
+  });
+  return org;
+});
+
+const org = await this.prisma.organizations.create({ data: orgData });
+await this.prisma.organization_users.create({
+  data: { organization_id: org.id, ...userData },
+});
+```
+
+## 3.2 Transaction Isolation
+
+**Be aware of isolation levels for concurrent operations:**
+
+- Default: READ COMMITTED
+- Use `$transaction` with `isolationLevel` if needed
+- Ask before changing isolation levels
+
+---
+
+# 4. MIGRATION SAFETY
+
+## 4.1 Never Modify Existing Migrations
+
+**Once committed, migrations are immutable:**
+
+- ❌ Never edit existing migration files
+- ✅ Create new migration for schema changes
+- ✅ Use `prisma migrate dev` for development
+- ✅ Use `prisma migrate deploy` for production
+
+## 4.2 Nullability Changes
+
+**Ask before making fields nullable/non-nullable:**
+
+```typescript
+model User {
+  email String
+}
+
+model User {
+  email String?
+  new_field String?
+}
+```
+
+## 4.3 Default Values
+
+**Always provide defaults for new required fields:**
+
+```typescript
+model Assignment {
+  status String @default("PENDING")
+  created_at DateTime @default(now())
+}
+
+model Assignment {
+  status String
+}
+```
+
+## 4.4 Migration Review Checklist
+
+Before creating migration, Claude must verify:
+
+- [ ] All new fields have defaults if required
+- [ ] No breaking changes to existing fields
+- [ ] Foreign key constraints are correct
+- [ ] Indexes added for frequently queried fields
+- [ ] No cross-tenant data leakage possible
+
+---
+
+# 5. TYPE SAFETY
+
+## 5.1 Use Prisma Types
+
+**Import types from Prisma, don't redefine:**
+
+```typescript
+import { Prisma } from '@prisma/client';
+type UserCreateInput = Prisma.organization_usersCreateInput;
+
+type UserCreateInput = {
+  first_name: string;
+  last_name: string;
+};
+```
+
+## 5.2 Type Inference
+
+**Use Prisma's generated types:**
+
+```typescript
+const user: Prisma.organization_usersGetPayload<{
+  include: { organization: true };
+}> = await this.prisma.organization_users.findFirst({
+  include: { organization: true },
+});
+
+type UserWithOrg = Prisma.organization_usersGetPayload<{
+  include: { organization: true };
+}>;
+```
+
+---
+
+# 6. PERFORMANCE OPTIMIZATION
+
+## 6.1 Index Usage
+
+**Ensure queries use indexes:**
+
+- organization_id + team_id → composite index
+- user_id + role_play_id → composite index
+- deleted_at → index for soft delete filtering
+
+**Ask before adding new indexes.**
+
+## 6.2 Pagination
+
+**Always paginate list queries:**
+
+```typescript
+const results = await this.prisma.model.findMany({
+  where: { organization_id },
+  take: limit || 50,
+  skip: offset || 0,
+  orderBy: { created_at: 'desc' },
+});
+
+const results = await this.prisma.model.findMany({
+  where: { organization_id },
+});
+```
+
+## 6.3 Count Queries
+
+**Use count() for totals, not findMany().length:**
+
+```typescript
+const total = await this.prisma.model.count({
+  where: { organization_id },
+});
+
+const all = await this.prisma.model.findMany({
+  where: { organization_id },
+});
+const total = all.length;
+```
+## 6.4 Paginated Member-Level Calculations
+
+When calculating per-member metrics in paginated results:
+
+**Prefer batch queries:**
+
+```typescript
+const trends = await this.batchGetScoreTrends(memberIds);
+const coverages = await this.batchGetCompetencyCoverages(memberIds);
+
+for (const memberId of paginatedMemberIds) {
+  const trend = await this.getScoreTrend(memberId);
+}
+```
+
+**Ask before implementing per-member queries in loops.**
+---
+
+# 7. ERROR HANDLING
+
+## 7.1 Handle Prisma Errors
+
+**Catch and handle Prisma-specific errors:**
+
+```typescript
+try {
+  await this.prisma.model.create({ data });
+} catch (error) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') {
+      throw this.errorService.conflict(ErrorCode.EMAIL_ALREADY_EXISTS);
+    }
+  }
+  throw error;
+}
+```
+
+## 7.2 Common Error Codes
+
+- `P2002`: Unique constraint violation
+- `P2003`: Foreign key constraint violation
+- `P2025`: Record not found
+- `P2014`: Required relation missing
+
+---
+
+# 8. REPOSITORY PATTERN
+
+## 8.1 Use Repository Layer
+
+**Keep Prisma queries in repository classes:**
+
+```typescript
+@Injectable()
+export class AssignmentRepository {
+  async findForTeam(teamId: string, orgId: string) {
+    return this.prisma.assignments.findMany({
+      where: { team_id: teamId, organization_id: orgId },
+    });
+  }
+}
+
+export class AssignmentService {
+  async getTeamAssignments(teamId: string) {
+    return this.prisma.assignments.findMany({
+      where: { team_id: teamId },
+    });
+  }
+}
+```
+
+## 8.2 Repository Responsibilities
+
+**Repositories handle:**
+- Query construction
+- Tenant scoping
+- Data transformation
+- Error handling
+
+**Services handle:**
+- Business logic
+- Validation
+- Orchestration
+- DTO mapping
+
+---
+
+# 9. PRE-QUERY VERIFICATION (MANDATORY)
+
+## 9.1 Schema Verification
+
+**Before writing ANY query, Claude must:**
+
+1. **Read `prisma/schema.prisma`** and identify:
+   - Model name and exact field names
+   - Relations and foreign keys
+   - Indexes available
+   - Soft delete fields (`deleted_at`)
+   - Required vs optional fields
+
+2. **List discovered schema details** before proposing query:
+   ```
+   Schema verification:
+   - Model: assignments
+   - Fields: id, organization_id, team_id, deleted_at, status
+   - Relations: user, team, role_play, track
+   - Indexes: organization_id, team_id, (organization_id, team_id)
+   ```
+
+3. **Verify field existence** - Never assume field names
+
+## 9.2 DTO/Type Discovery
+
+**Before using or creating DTOs/types:**
+
+1. **Search existing DTOs:**
+   ```bash
+   # Search pattern
+   **/dto/**/*.ts
+   **/types/**/*.ts
+   ```
+
+2. **List all discovered DTOs/types** before proposing:
+   ```
+   Existing DTOs found:
+   - src/assignments/dto/list-assignments.dto.ts
+   - src/assignments/dto/create-assignment.dto.ts
+   ```
+
+3. **Reuse existing** - Never create duplicate DTOs
+
+4. **Ask if missing** - If DTO doesn't exist, ask before creating
+
+## 9.3 Missing Information Enumeration
+
+**For ambiguous tasks, Claude must enumerate ALL missing info:**
+
+```
+Missing information:
+1. Pagination DTO location - where should pagination response DTO live?
+2. Error codes - which ErrorCode enum values to use?
+3. Permission requirements - which permissions needed for this endpoint?
+4. Cache key structure - what's the existing cache key pattern?
+```
+
+**Do NOT propose partial solutions without listing gaps.**
+
+---
+
+# 10. ASK BEFORE
+
+Claude must ask if unsure about:
+
+- Schema structure (check `prisma/schema.prisma` first, then ask)
+- Field names (verify in schema, then ask if ambiguous)
+- Index requirements
+- Migration strategy
+- Transaction boundaries
+- Query performance
+- Relation structure
+- DTO placement
+- Existing type definitions
+
+---
+
+# 11. MANDATORY CHECKLIST
+
+Before writing any Prisma query, Claude must verify:
+
+**Pre-Query:**
+- [ ] Schema read and model fields verified
+- [ ] Existing DTOs/types searched and listed
+- [ ] Missing information enumerated
+
+**Query Construction:**
+- [ ] organization_id filter included (or scoped through relation)
+- [ ] **If querying through relations (assessments, assignments), organization_id scoped at relation level** (defense-in-depth)
+- [ ] **If filtering by team through relations, organization_id verified at relation level**
+- [ ] team_id included if querying team data
+- [ ] deleted_at filter for soft-deleted models
+- [ ] **orderBy included for ALL findMany queries** (mandatory, even if aggregating)
+- [ ] Pagination applied (take/skip)
+- [ ] No N+1 queries (use batch operations)
+- [ ] Transaction used for multi-step writes
+- [ ] Error handling for Prisma errors
+- [ ] Types imported from Prisma, not redefined
+
+**Post-Query:**
+- [ ] Query verified against schema
+- [ ] Tenant isolation confirmed
+- [ ] Performance considerations addressed
+
+---
+
+# 12. RELATED SOP FILES
+
+For complete coverage, also read:
+
+- `2-supabase` — Auth, RBAC, org-scoping rules
+- `4-code-safety-patterns` — Code movement dependencies, closure captures
+- `5-error-handling-logging` — Prisma error handling, NestJS exceptions
+- `7-queue-job-processing` — Tenant context in background jobs
+- `8-api-design-patterns` — Pagination response patterns
+
+---
+
+# END OF FILE
+

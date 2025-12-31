@@ -1,0 +1,13 @@
+# Source files (dist is published)
+*.ts
+!*.d.ts
+tsconfig.json
+
+# Dev files
+.gitignore
+node_modules/
+
+# Test files
+test-runner.ts
+*.test.ts
+*.spec.ts

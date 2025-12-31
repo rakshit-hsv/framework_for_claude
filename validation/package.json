@@ -1,14 +1,22 @@
 {
-  "name": "sop-validation",
+  "name": "@rakshit-hsv/sop-validate",
   "version": "1.0.0",
-  "description": "SOP Validation Framework - Validates Claude's code against SOP rules",
-  "main": "cli.js",
+  "description": "SOP Validation CLI - Validates code against SOP rules for NestJS, Prisma, Supabase",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
   "bin": {
-    "sop-validate": "./cli.ts"
+    "sop-validate": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "sop-files",
+    "README.md"
+  ],
   "scripts": {
-    "validate": "ts-node cli.ts",
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
 
+    "validate": "ts-node cli.ts",
     "validate:full": "ts-node cli.ts --full --verbose",
     "validate:staged": "ts-node cli.ts --staged",
     "validate:changed": "ts-node cli.ts --changed",
@@ -44,11 +52,25 @@
     "code-quality",
     "nestjs",
     "prisma",
+    "supabase",
     "claude",
-    "ai-code-review"
+    "ai-code-review",
+    "linter",
+    "cli"
   ],
-  "author": "",
+  "author": "rakshit-hsv",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rakshit-hsv/framework_for_claude.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rakshit-hsv/framework_for_claude/issues"
+  },
+  "homepage": "https://github.com/rakshit-hsv/framework_for_claude#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "ts-node": "^10.9.0",
