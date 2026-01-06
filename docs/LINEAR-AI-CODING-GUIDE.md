@@ -79,38 +79,21 @@ Result: Code passes review. Ships same day.
 
 ### 1. Install the CLI
 
-**One-liner (recommended):**
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rakshit-hsv/framework_for_claude/main/install.sh | bash
-```
-
-**Or manually:**
-
-```bash
-git clone https://github.com/rakshit-hsv/framework_for_claude.git ~/.sop-validate
-cd ~/.sop-validate/validation
-npm install && npm run build && npm link
 ```
 
 ### 2. Initialize in Your Project
 
 ```bash
-cd your-backend-project
 sop-validate init
 ```
 
-Creates `./claude-sop-api/` with 9 rule files.
-
-### 3. Point Claude to the Rules
-
-Add to your project's `CLAUDE.md`:
+### 3. Add to CLAUDE.md
 
 ```markdown
 Read claude-sop-api/CLAUDE.md before writing any code.
 ```
-
-For Cursor, add the same to `.cursorrules`.
 
 ---
 
