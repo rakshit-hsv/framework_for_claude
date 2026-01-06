@@ -103,20 +103,20 @@ Read claude-sop-api/CLAUDE.md before writing any code.
 
 | File | Purpose | When to Reference |
 |------|---------|-------------------|
-| `CLAUDE.md` | Master operating mode. Ask first, minimal changes, no inventing | Every session |
-| `2-supabase.md` | Auth, guards, JWT validation, RBAC, fail-closed endpoints | Any endpoint work |
-| `3-database-prisma.md` | Queries, tenant isolation, transactions, soft deletes | Any database work |
+| [CLAUDE.md](../CLAUDE.md) | Master operating mode. Ask first, minimal changes, no inventing | Every session |
+| [2-supabase.md](../2-supabase.md) | Auth, guards, JWT validation, RBAC, fail-closed endpoints | Any endpoint work |
+| [3-database-prisma.md](../3-database-prisma.md) | Queries, tenant isolation, transactions, soft deletes | Any database work |
 
 ### Supporting Rules
 
 | File | Purpose | When to Reference |
 |------|---------|-------------------|
-| `4-code-safety-patterns.md` | Refactoring, moving code, variable dependencies | Modifying existing code |
-| `5-error-handling-logging.md` | NestJS exceptions, Logger service, sensitive data | Error handling, logging |
-| `6-external-services-timing.md` | Timeouts, retries, external API calls | Third-party integrations |
-| `7-queue-job-processing.md` | Job idempotency, tenant context, dead-letter queues | Background jobs |
-| `8-api-design-patterns.md` | Response format, pagination, DTOs | API design |
-| `9-testing-code-quality.md` | Testability, review checklist, security | Before code review |
+| [4-code-safety-patterns.md](../4-code-safety-patterns.md) | Refactoring, moving code, variable dependencies | Modifying existing code |
+| [5-error-handling-logging.md](../5-error-handling-logging.md) | NestJS exceptions, Logger service, sensitive data | Error handling, logging |
+| [6-external-services-timing.md](../6-external-services-timing.md) | Timeouts, retries, external API calls | Third-party integrations |
+| [7-queue-job-processing.md](../7-queue-job-processing.md) | Job idempotency, tenant context, dead-letter queues | Background jobs |
+| [8-api-design-patterns.md](../8-api-design-patterns.md) | Response format, pagination, DTOs | API design |
+| [9-testing-code-quality.md](../9-testing-code-quality.md) | Testability, review checklist, security | Before code review |
 
 ---
 
@@ -183,20 +183,20 @@ sop-validate --branch feature/my-feature
 
 | Check | Rule |
 |-------|------|
-| Missing `organization_id` in queries | 3-database-prisma.md |
-| Decode-only JWT | 2-supabase.md |
-| Hard deletes on soft-delete tables | 3-database-prisma.md |
-| Multi-table writes without `$transaction` | 3-database-prisma.md |
-| Token/password in logs | 5-error-handling-logging.md |
+| Missing `organization_id` in queries | [3-database-prisma.md](../3-database-prisma.md) |
+| Decode-only JWT | [2-supabase.md](../2-supabase.md) |
+| Hard deletes on soft-delete tables | [3-database-prisma.md](../3-database-prisma.md) |
+| Multi-table writes without `$transaction` | [3-database-prisma.md](../3-database-prisma.md) |
+| Token/password in logs | [5-error-handling-logging.md](../5-error-handling-logging.md) |
 
 ### Warnings (Should Fix)
 
 | Check | Rule |
 |-------|------|
-| `console.log` instead of Logger | 5-error-handling-logging.md |
-| Generic `Error` instead of NestJS exceptions | 5-error-handling-logging.md |
-| `findMany` without `orderBy` | 3-database-prisma.md |
-| `findMany().length` instead of `count()` | 3-database-prisma.md |
+| `console.log` instead of Logger | [5-error-handling-logging.md](../5-error-handling-logging.md) |
+| Generic `Error` instead of NestJS exceptions | [5-error-handling-logging.md](../5-error-handling-logging.md) |
+| `findMany` without `orderBy` | [3-database-prisma.md](../3-database-prisma.md) |
+| `findMany().length` instead of `count()` | [3-database-prisma.md](../3-database-prisma.md) |
 
 ---
 
