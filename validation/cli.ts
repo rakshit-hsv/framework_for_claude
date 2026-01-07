@@ -292,18 +292,26 @@ function loadAllFiles(dir: string, options: CLIOptions): Map<string, string> {
       const fullPath = path.join(currentDir, entry.name);
       const relativePath = path.relative(dir, fullPath);
 
-      if (!matchPatterns(relativePath, options.include, options.exclude)) {
-        continue;
-      }
-
       if (entry.isDirectory()) {
-        walkDir(fullPath);
+        // Check if directory is excluded (e.g., node_modules/**)
+        const isExcluded = options.exclude.some(pattern => {
+          // Check if the directory matches an exclusion pattern
+          return matchGlob(relativePath, pattern) ||
+                 matchGlob(relativePath + '/', pattern) ||
+                 matchGlob(relativePath, pattern.replace('/**', ''));
+        });
+        if (!isExcluded) {
+          walkDir(fullPath);
+        }
       } else if (entry.isFile()) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          contents.set(relativePath, content);
-        } catch (e) {
-          console.error(`Warning: Could not read ${relativePath}`);
+        // Apply include/exclude patterns only to files
+        if (matchPatterns(relativePath, options.include, options.exclude)) {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            contents.set(relativePath, content);
+          } catch (e) {
+            console.error(`Warning: Could not read ${relativePath}`);
+          }
         }
       }
     }
@@ -335,10 +343,12 @@ function matchPatterns(
 }
 
 function matchGlob(filePath: string, pattern: string): boolean {
-  const regex = pattern
+  let regex = pattern
     .replace(/\./g, '\\.')
-    .replace(/\*\*/g, '{{GLOBSTAR}}')
+    .replace(/\*\*\//g, '{{GLOBSTAR_SLASH}}')  // Match **/ (zero or more directories)
+    .replace(/\*\*/g, '{{GLOBSTAR}}')           // Match remaining **
     .replace(/\*/g, '[^/]*')
+    .replace(/{{GLOBSTAR_SLASH}}/g, '(?:.*/)?') // **/ means optional directory path
     .replace(/{{GLOBSTAR}}/g, '.*');
 
   return new RegExp(`^${regex}$`).test(filePath);
@@ -582,8 +592,8 @@ function parseArgs(args: string[]): CLIOptions {
   const options: CLIOptions = {
     mode: 'full',
     targetDir: process.cwd(),
-    include: ['*.ts'],
-    exclude: ['node_modules/**', 'dist/**', '*.spec.ts', '*.test.ts', '*.d.ts'],
+    include: ['**/*.ts'],
+    exclude: ['node_modules/**', 'dist/**', '**/*.spec.ts', '**/*.test.ts', '**/*.d.ts'],
     validators: [],
     sopFiles: [],
     format: 'console',
